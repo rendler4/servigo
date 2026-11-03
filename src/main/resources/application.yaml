@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: servigo
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/servigo
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:admin}
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 2
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000
+      cache-null-values: false
+      use-key-prefix: true
+
+server:
+  port: 8083
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    groups:
+      enabled: true
+  api-docs:
+    path: /v3/api-docs
+  version: 1.0.0
+  info:
+    title: API Servigo
+    description: Fase 1 - Profile (auth JWT) y ServiceCategory (catalogo con cache Redis).
+    version: 1.0.0
+    contact:
+      name: Andres Reyes
+      email: andres.reyes@dropi.co
+    license:
+      name: Apache 2.0
+      url: http://springdoc.org
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:servigo-secreto-de-desarrollo-cambiar-en-produccion-min-256-bits}
+      expiration-ms: 3600000
