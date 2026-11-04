@@ -1,0 +1,557 @@
+{
+  "info": {
+    "name": "Servigo - Fase 1 (Profile + ServiceCategory)",
+    "description": "Coleccion para probar servigo (Spring Boot hexagonal + JWT + cache Redis).\n\nCorre las carpetas en orden con el Collection Runner: 'Auth' primero (genera el perfil y el JWT que usa 'Categorias' despues).\n\nRequiere la app corriendo en el puerto de `baseUrl` (por defecto 8083), con Postgres y Redis locales activos.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Registrar perfil (dummy aleatorio)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Genera datos dummy nuevos en cada ejecucion (email unico por timestamp).",
+                  "const email = 'proveedor.' + Date.now() + '@servigo.com';",
+                  "const password = 'secreto123';",
+                  "const fullName = pm.variables.replaceIn('{{$randomFirstName}} {{$randomLastName}}');",
+                  "const phone = pm.variables.replaceIn('{{$randomPhoneNumber}}');",
+                  "",
+                  "pm.variables.set('nuevoEmail', email);",
+                  "pm.variables.set('nuevoPassword', password);",
+                  "pm.variables.set('nuevoFullName', fullName);",
+                  "pm.variables.set('nuevoPhone', phone);",
+                  "",
+                  "pm.environment.set('profileEmail', email);",
+                  "pm.environment.set('profilePassword', password);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Devuelve el perfil sin password y con identityStatus NOT_SUBMITTED', () => {",
+                  "  pm.expect(body.id).to.exist;",
+                  "  pm.expect(body.email).to.eql(pm.variables.get('nuevoEmail'));",
+                  "  pm.expect(body.userType).to.eql('PROVIDER');",
+                  "  pm.expect(body.identityStatus).to.eql('NOT_SUBMITTED');",
+                  "  pm.expect(body).to.not.have.property('passwordHash');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{nuevoEmail}}\",\n  \"password\": \"{{nuevoPassword}}\",\n  \"fullName\": \"{{nuevoFullName}}\",\n  \"phone\": \"{{nuevoPhone}}\",\n  \"userType\": \"PROVIDER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            },
+            "description": "Registra un proveedor con datos aleatorios y guarda email/password en el entorno."
+          }
+        },
+        {
+          "name": "Registrar perfil duplicado (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('Incluye mensaje', () => pm.expect(pm.response.json()).to.have.property('message'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{profileEmail}}\",\n  \"password\": \"otraClave123\",\n  \"fullName\": \"Otro Nombre\",\n  \"phone\": \"3000000000\",\n  \"userType\": \"PROVIDER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            },
+            "description": "Reutiliza el email ya registrado (columna unica) para forzar un 409."
+          }
+        },
+        {
+          "name": "Registrar perfil invalido (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const body = pm.response.json();",
+                  "pm.test('Reporta errores de validacion', () => {",
+                  "  pm.expect(body).to.have.property('details');",
+                  "  pm.expect(body.details).to.be.an('array').and.have.length.greaterThan(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"no-es-un-correo\",\n  \"password\": \"123\",\n  \"fullName\": \"\",\n  \"phone\": \"\",\n  \"userType\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login correcto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Devuelve un accessToken Bearer', () => {",
+                  "  pm.expect(body.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.tokenType).to.eql('Bearer');",
+                  "});",
+                  "pm.environment.set('accessToken', body.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{profileEmail}}\",\n  \"password\": \"{{profilePassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Inicia sesion con el perfil creado y guarda el JWT en `accessToken` para las siguientes peticiones."
+          }
+        },
+        {
+          "name": "Login password incorrecto (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Incluye mensaje', () => pm.expect(pm.response.json()).to.have.property('message'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{profileEmail}}\",\n  \"password\": \"claveIncorrecta\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categorias",
+      "item": [
+        {
+          "name": "Listar categorias (publico)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Respuesta es un arreglo', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias"]
+            },
+            "description": "Lectura publica, cacheada en Redis bajo la key 'categorias::activas'. No requiere token."
+          }
+        },
+        {
+          "name": "Crear categoria sin token (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403 Forbidden', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Plomeria\",\n  \"description\": \"Reparaciones de tuberias\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias"]
+            }
+          }
+        },
+        {
+          "name": "Crear categoria (con token)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const nombre = 'Categoria-' + Date.now();",
+                  "pm.variables.set('nuevoNombreCategoria', nombre);",
+                  "pm.environment.set('categoriaNombre', nombre);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Devuelve id, nombre y active=true', () => {",
+                  "  pm.expect(body.id).to.exist;",
+                  "  pm.expect(body.name).to.eql(pm.environment.get('categoriaNombre'));",
+                  "  pm.expect(body.active).to.eql(true);",
+                  "});",
+                  "pm.environment.set('categoriaId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{nuevoNombreCategoria}}\",\n  \"description\": \"Instalaciones y reparaciones\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias"]
+            },
+            "description": "Crea una categoria con nombre unico (timestamp) y guarda su id en el entorno. Invalida el cache de categorias activas."
+          }
+        },
+        {
+          "name": "Crear categoria duplicada (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('Incluye mensaje', () => pm.expect(pm.response.json()).to.have.property('message'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{categoriaNombre}}\",\n  \"description\": \"otra descripcion\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias"]
+            },
+            "description": "Reutiliza el nombre ya creado (columna unica) para forzar un 409."
+          }
+        },
+        {
+          "name": "Listar categorias (ahora con 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Incluye la categoria creada', () => {",
+                  "  const nombres = body.map(c => c.name);",
+                  "  pm.expect(nombres).to.include(pm.environment.get('categoriaNombre'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias"]
+            }
+          }
+        },
+        {
+          "name": "Buscar categoria por id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Id coincide', () => {",
+                  "  pm.expect(String(pm.response.json().id)).to.eql(String(pm.environment.get('categoriaId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias/{{categoriaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias", "{{categoriaId}}"]
+            }
+          }
+        },
+        {
+          "name": "Buscar categoria inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Incluye mensaje', () => pm.expect(pm.response.json()).to.have.property('message'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias/{{idInexistente}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias", "{{idInexistente}}"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar categoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Descripcion actualizada', () => {",
+                  "  pm.expect(pm.response.json().description).to.eql('Instalaciones, reparaciones y mantenimiento');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{categoriaNombre}}\",\n  \"description\": \"Instalaciones, reparaciones y mantenimiento\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias/{{categoriaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias", "{{categoriaId}}"]
+            },
+            "description": "Actualiza la descripcion manteniendo el mismo id. Invalida el cache de categorias activas."
+          }
+        },
+        {
+          "name": "Actualizar categoria inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"No existe\",\n  \"description\": \"no existe\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias/{{idInexistente}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias", "{{idInexistente}}"]
+            }
+          }
+        },
+        {
+          "name": "Desactivar categoria (logico)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias/{{categoriaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias", "{{categoriaId}}"]
+            }
+          }
+        },
+        {
+          "name": "Verificar desactivada (active=false)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 (la fila sigue existiendo)', () => pm.response.to.have.status(200));",
+                  "pm.test('active es false', () => pm.expect(pm.response.json().active).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias/{{categoriaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias", "{{categoriaId}}"]
+            },
+            "description": "El borrado es logico: la fila sigue existiendo y consultable por id, pero con active=false. No aparece en el listado de activas."
+          }
+        },
+        {
+          "name": "Eliminar categoria inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias/{{idInexistente}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias", "{{idInexistente}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
