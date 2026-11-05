@@ -78,11 +78,15 @@ La app queda en `http://localhost:8083`.
 |---|---|---|---|
 | GET | `/` | Público | Lista categorías activas (cacheada en Redis, TTL 60 min) |
 | GET | `/{id}` | Público | Busca una categoría por id |
-| POST | `/` | Autenticado | Crea una categoría (invalida el cache) |
-| PUT | `/{id}` | Autenticado | Actualiza una categoría (invalida el cache) |
-| DELETE | `/{id}` | Autenticado | Desactiva una categoría — borrado lógico, nunca físico (invalida el cache) |
+| POST | `/` | Solo `PROVIDER` | Crea una categoría (invalida el cache) |
+| PUT | `/{id}` | Solo `PROVIDER` | Actualiza una categoría (invalida el cache) |
+| DELETE | `/{id}` | Solo `PROVIDER` | Desactiva una categoría — borrado lógico, nunca físico (invalida el cache) |
 
-Códigos de respuesta: `200/201` éxito · `400` validación · `401` credenciales inválidas · `403` sin permiso/token · `404` no existe · `409` conflicto (correo o nombre duplicado).
+Códigos de respuesta: `200/201` éxito · `400` validación · `401` credenciales inválidas · `403` sin permiso/rol/token · `404` no existe · `409` conflicto (correo o nombre duplicado).
+
+## Roles y permisos
+
+El JWT lleva el `userType` del perfil (`CLIENT` o `PROVIDER`) como claim `rol`. `JwtAuthenticationFilter` lo convierte en una autoridad de Spring Security con el prefijo `ROLE_` (`ROLE_CLIENT` / `ROLE_PROVIDER`), y los endpoints de escritura de `/api/v1/categorias` están protegidos con `@PreAuthorize("hasRole('PROVIDER')")`: un `CLIENT` autenticado recibe `403`, no `401` (la autenticación es válida, el permiso no).
 
 ## Probarla con Postman
 

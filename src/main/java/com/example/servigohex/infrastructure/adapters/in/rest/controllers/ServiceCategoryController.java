@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -46,8 +47,10 @@ public class ServiceCategoryController {
     }
 
     @PostMapping
-    @Operation(summary = "Crear categoría", description = "Requiere autenticación. Invalida el cache de categorías activas")
+    @PreAuthorize("hasRole('PROVIDER')")
+    @Operation(summary = "Crear categoría", description = "Solo proveedores. Invalida el cache de categorías activas")
     @ApiResponse(responseCode = "201", description = "Categoría creada exitosamente")
+    @ApiResponse(responseCode = "403", description = "El usuario autenticado no tiene rol PROVIDER")
     @ApiResponse(responseCode = "409", description = "Ya existe una categoría con ese nombre")
     public ResponseEntity<ServiceCategoryResponse> crear(@Valid @RequestBody ServiceCategoryRequest request) {
         ServiceCategory categoria = serviceCategoryUseCase.crear(
@@ -58,8 +61,10 @@ public class ServiceCategoryController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Actualizar categoría", description = "Requiere autenticación. Invalida el cache de categorías activas")
+    @PreAuthorize("hasRole('PROVIDER')")
+    @Operation(summary = "Actualizar categoría", description = "Solo proveedores. Invalida el cache de categorías activas")
     @ApiResponse(responseCode = "200", description = "Categoría actualizada exitosamente")
+    @ApiResponse(responseCode = "403", description = "El usuario autenticado no tiene rol PROVIDER")
     @ApiResponse(responseCode = "404", description = "No existe una categoría con ese id")
     public ResponseEntity<ServiceCategoryResponse> actualizar(@PathVariable Long id,
                                                                @Valid @RequestBody ServiceCategoryRequest request) {
@@ -69,8 +74,10 @@ public class ServiceCategoryController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Desactivar categoría", description = "Borrado lógico (active=false). Requiere autenticación e invalida el cache")
+    @PreAuthorize("hasRole('PROVIDER')")
+    @Operation(summary = "Desactivar categoría", description = "Borrado lógico (active=false). Solo proveedores, invalida el cache")
     @ApiResponse(responseCode = "204", description = "Categoría desactivada exitosamente")
+    @ApiResponse(responseCode = "403", description = "El usuario autenticado no tiene rol PROVIDER")
     @ApiResponse(responseCode = "404", description = "No existe una categoría con ese id")
     public ResponseEntity<Void> desactivar(@PathVariable Long id) {
         serviceCategoryUseCase.desactivar(id);
