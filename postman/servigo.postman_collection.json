@@ -187,6 +187,84 @@
               "path": ["api", "v1", "auth", "login"]
             }
           }
+        },
+        {
+          "name": "Registrar cliente (dummy aleatorio)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const email = 'cliente.' + Date.now() + '@servigo.com';",
+                  "const password = 'secreto123';",
+                  "const fullName = pm.variables.replaceIn('{{$randomFirstName}} {{$randomLastName}}');",
+                  "const phone = pm.variables.replaceIn('{{$randomPhoneNumber}}');",
+                  "",
+                  "pm.variables.set('nuevoClienteEmail', email);",
+                  "pm.variables.set('nuevoClientePassword', password);",
+                  "pm.variables.set('nuevoClienteFullName', fullName);",
+                  "pm.variables.set('nuevoClientePhone', phone);",
+                  "",
+                  "pm.environment.set('clientEmail', email);",
+                  "pm.environment.set('clientPassword', password);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('userType es CLIENT', () => pm.expect(pm.response.json().userType).to.eql('CLIENT'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{nuevoClienteEmail}}\",\n  \"password\": \"{{nuevoClientePassword}}\",\n  \"fullName\": \"{{nuevoClienteFullName}}\",\n  \"phone\": \"{{nuevoClientePhone}}\",\n  \"userType\": \"CLIENT\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            },
+            "description": "Registra un segundo perfil, esta vez CLIENT, para probar la restriccion de rol en Categorias (solo PROVIDER puede escribir)."
+          }
+        },
+        {
+          "name": "Login cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('clientAccessToken', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{clientEmail}}\",\n  \"password\": \"{{clientPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Guarda el JWT del cliente en `clientAccessToken`."
+          }
         }
       ]
     },
@@ -243,6 +321,39 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "categorias"]
             }
+          }
+        },
+        {
+          "name": "Crear categoria como CLIENT (403, solo PROVIDER)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('Incluye mensaje', () => pm.expect(pm.response.json()).to.have.property('message'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{clientAccessToken}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"CategoriaDeCliente\",\n  \"description\": \"un CLIENT no deberia poder crear categorias\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorias",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categorias"]
+            },
+            "description": "Permisos por rol: crear/actualizar/desactivar categorias es solo para PROVIDER. Un CLIENT autenticado (token valido) debe recibir 403, no 401."
           }
         },
         {
