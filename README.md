@@ -102,6 +102,14 @@ Exchange `servigo.exchange` → cola `servigo.categorias.creacion` (routing key 
 
 Los jobs no corren al arrancar (`spring.batch.job.enabled=false`) y las tablas `batch_*` se crean solas en la base `servigo`.
 
+## Pruebas y cobertura
+
+```bash
+mvn verify
+```
+
+Pruebas unitarias con JUnit 5 + Mockito (servicios, adaptadores, batch, cron, mensajería) y `@WebMvcTest` con Spring Security para los controllers; no necesitan PostgreSQL, Redis ni RabbitMQ. JaCoCo genera el reporte en `target/site/jacoco/index.html` y `verify` falla si la cobertura de instrucciones baja del 80 % (excluye `config`, `dto`, `entities`, modelos y enums).
+
 Códigos de respuesta: `200/201` éxito · `400` validación · `401` credenciales inválidas · `403` sin permiso/rol/token · `404` no existe · `409` conflicto (correo o nombre duplicado).
 
 ## Roles y permisos
