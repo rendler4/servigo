@@ -30,6 +30,16 @@ spring:
       time-to-live: 600000
       cache-null-values: false
       use-key-prefix: true
+  rabbitmq:
+    # URL AMQP de la instancia (p. ej. CloudAMQP). Nunca dejar credenciales reales en este archivo.
+    addresses: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672}
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
 
 server:
   port: 8083
@@ -58,3 +68,9 @@ app:
     jwt:
       secret: ${JWT_SECRET:servigo-secreto-de-desarrollo-cambiar-en-produccion-min-256-bits}
       expiration-ms: 3600000
+  messaging:
+    rabbitmq:
+      exchange: servigo.exchange
+      categorias:
+        queue: servigo.categorias.creacion
+        routing-key: categorias.creacion

@@ -36,6 +36,7 @@ Regla: `domain` y `application` no dependen de Spring ni de JPA (salvo la anotac
 - Maven (o el wrapper `mvnw`)
 - PostgreSQL corriendo localmente
 - Redis corriendo localmente (por ejemplo, un contenedor Docker)
+- Una instancia de RabbitMQ (CloudAMQP, plan gratis, o local)
 
 ## Configuración
 
@@ -49,6 +50,7 @@ Variables de entorno (todas con valores por defecto para desarrollo local en `ap
 | `REDIS_PORT` | `6379` | Puerto de Redis |
 | `REDIS_PASSWORD` | `admin` | Password de Redis |
 | `JWT_SECRET` | (clave de desarrollo) | Secreto para firmar los JWT — **cambiar en producción** |
+| `RABBITMQ_URL` | `amqp://guest:guest@localhost:5672` | URL AMQP de RabbitMQ (p. ej. la *AMQP URL* de CloudAMQP). **No guardarla en el repo** |
 
 La base de datos se llama `servigo` (créala antes de arrancar: `CREATE DATABASE servigo;`). Las tablas las crea Hibernate solas (`ddl-auto: update`).
 
@@ -81,6 +83,14 @@ La app queda en `http://localhost:8083`.
 | POST | `/` | Solo `PROVIDER` | Crea una categoría (invalida el cache) |
 | PUT | `/{id}` | Solo `PROVIDER` | Actualiza una categoría (invalida el cache) |
 | DELETE | `/{id}` | Solo `PROVIDER` | Desactiva una categoría — borrado lógico, nunca físico (invalida el cache) |
+
+### Categorías vía cola (`/api/v1/categorias/cola`) — RabbitMQ
+
+| Método | Ruta | Acceso | Descripción |
+|---|---|---|---|
+| POST | `/` | Solo `PROVIDER` | Publica la categoría en RabbitMQ y responde `202`; `ServiceCategoryCreationConsumer` la crea con el mismo caso de uso del REST |
+
+Exchange `servigo.exchange` → cola `servigo.categorias.creacion` (routing key `categorias.creacion`). El consumer reintenta 3 veces y luego descarta el mensaje (p. ej. nombre duplicado).
 
 Códigos de respuesta: `200/201` éxito · `400` validación · `401` credenciales inválidas · `403` sin permiso/rol/token · `404` no existe · `409` conflicto (correo o nombre duplicado).
 
