@@ -14,4 +14,6 @@ public interface ServiceCategoryRepositoryPort {
     ServiceCategory save(ServiceCategory categoria);
 
     boolean existsByName(String name);
+
+    long countByActive(boolean active);
 }

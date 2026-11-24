@@ -51,6 +51,7 @@ Variables de entorno (todas con valores por defecto para desarrollo local en `ap
 | `REDIS_PASSWORD` | `admin` | Password de Redis |
 | `JWT_SECRET` | (clave de desarrollo) | Secreto para firmar los JWT — **cambiar en producción** |
 | `RABBITMQ_URL` | `amqp://guest:guest@localhost:5672` | URL AMQP de RabbitMQ (p. ej. la *AMQP URL* de CloudAMQP). **No guardarla en el repo** |
+| `BATCH_CRON` | `0 * * * * *` (cada minuto) | Cron que dispara los jobs de Spring Batch; `-` lo desactiva |
 
 La base de datos se llama `servigo` (créala antes de arrancar: `CREATE DATABASE servigo;`). Las tablas las crea Hibernate solas (`ddl-auto: update`).
 
@@ -91,6 +92,15 @@ La app queda en `http://localhost:8083`.
 | POST | `/` | Solo `PROVIDER` | Publica la categoría en RabbitMQ y responde `202`; `ServiceCategoryCreationConsumer` la crea con el mismo caso de uso del REST |
 
 Exchange `servigo.exchange` → cola `servigo.categorias.creacion` (routing key `categorias.creacion`). El consumer reintenta 3 veces y luego descarta el mensaje (p. ej. nombre duplicado).
+
+## Spring Batch + Cron
+
+`CronService` (`adapters/in/cron`) dispara con `@Scheduled` dos jobs, cada uno como adaptador de entrada que delega en un caso de uso de `application`:
+
+- `reporteCategoriasJob` (Tasklet): cuenta categorías activas e inactivas a la fecha de corte.
+- `reporteProveedoresPendientesJob` (chunk de 5: reader → processor → writer): reporta los proveedores cuya identidad no está aprobada.
+
+Los jobs no corren al arrancar (`spring.batch.job.enabled=false`) y las tablas `batch_*` se crean solas en la base `servigo`.
 
 Códigos de respuesta: `200/201` éxito · `400` validación · `401` credenciales inválidas · `403` sin permiso/rol/token · `404` no existe · `409` conflicto (correo o nombre duplicado).
 

@@ -12,4 +12,6 @@ public interface ServiceCategoryJpaRepository extends JpaRepository<ServiceCateg
     List<ServiceCategoryEntity> findAllByActiveTrue();
 
     boolean existsByName(String name);
+
+    long countByActive(boolean active);
 }

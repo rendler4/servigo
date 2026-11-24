@@ -40,6 +40,12 @@ spring:
         retry:
           enabled: true
           max-attempts: 3
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      # Crea las tablas batch_* en la BD; se puede cambiar a "never" tras el primer arranque.
+      initialize-schema: always
 
 server:
   port: 8083
@@ -74,3 +80,6 @@ app:
       categorias:
         queue: servigo.categorias.creacion
         routing-key: categorias.creacion
+  batch:
+    cron: ${BATCH_CRON:0 * * * * *} # cada minuto (seg, min, hora, día del mes, mes, día de la semana); "-" lo desactiva
+    zona: America/Bogota

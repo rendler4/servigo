@@ -46,4 +46,9 @@ public class ServiceCategoryPersistenceAdapter implements ServiceCategoryReposit
     public boolean existsByName(String name) {
         return serviceCategoryJpaRepository.existsByName(name);
     }
+
+    @Override
+    public long countByActive(boolean active) {
+        return serviceCategoryJpaRepository.countByActive(active);
+    }
 }
